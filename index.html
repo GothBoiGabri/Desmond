@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICCOM — Assistente AI (Gemini)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:      #f4f6f9;
+  --white:   #ffffff;
+  --dark:    #0d1b2a;
+  --primary: #0055b3;
+  --primary2:#0077e6;
+  --accent:  #00b4d8;
+  --green:   #00b899;
+  --red:     #e63946;
+  --orange:  #f4a261;
+  --text:    #1a2a3a;
+  --muted:   #7a8fa6;
+  --border:  #dce6f0;
+  --shadow:  0 8px 40px rgba(0,85,179,0.13);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* demo backdrop */
+.demo-page {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #e8f0fe 0%, #f0f8ff 50%, #e8f5f0 100%);
+}
+.demo-pill {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  background: white; border: 1px solid var(--border);
+  border-radius: 99px; padding: 6px 18px;
+  font-size: 12px; color: var(--primary); font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0,85,179,0.1);
+  white-space: nowrap; z-index: 10;
+}
+
+/* ── FAB ── */
+#fab {
+  position: fixed; bottom: 28px; right: 28px;
+  width: 62px; height: 62px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 24px rgba(0,85,179,0.4);
+  z-index: 1000;
+  transition: transform .2s, box-shadow .2s;
+  animation: pulse 3s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 6px 24px rgba(0,85,179,0.4); }
+  50%      { box-shadow: 0 6px 32px rgba(0,85,179,0.6), 0 0 0 8px rgba(0,85,179,0.08); }
+}
+#fab:hover { transform: scale(1.07); animation: none; box-shadow: 0 8px 30px rgba(0,85,179,0.5); }
+#fab svg { width: 26px; height: 26px; fill: white; }
+#fab .ico-close { display: none; }
+.fab-badge {
+  position: absolute; top: -3px; right: -3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--red); border: 2px solid var(--bg);
+  font-size: 11px; font-weight: 700; color: white;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── CHAT WINDOW ── */
+#cwin {
+  position: fixed; bottom: 106px; right: 28px;
+  width: 400px; height: 590px;
+  background: var(--white);
+  border-radius: 20px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(0,85,179,0.07);
+  z-index: 999;
+  opacity: 0; pointer-events: none;
+  transform: scale(.88) translateY(14px);
+  transform-origin: bottom right;
+  transition: opacity .28s, transform .28s cubic-bezier(.34,1.56,.64,1);
+}
+#cwin.open { opacity: 1; pointer-events: all; transform: scale(1) translateY(0); }
+
+/* header */
+.hdr {
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary2) 100%);
+  display: flex; align-items: center; gap: 11px;
+  flex-shrink: 0;
+}
+.hdr-av {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; position: relative; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+.hdr-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #4ade80;
+  position: absolute; bottom: -1px; right: -1px;
+  border: 2px solid var(--primary);
+  animation: blink 2.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.hdr-info h3 { font-size: 14px; font-weight: 700; color: white; }
+.hdr-info p  { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 1px; }
+.hdr-close {
+  margin-left: auto; width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(255,255,255,0.12); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.8); transition: background .2s;
+}
+.hdr-close:hover { background: rgba(255,255,255,0.22); }
+
+/* lead alert banner */
+#lead-banner {
+  display: none;
+  padding: 8px 14px;
+  background: linear-gradient(90deg, #fff3cd, #fff8e1);
+  border-bottom: 2px solid var(--orange);
+  font-size: 11.5px; color: #7a4500; font-weight: 600;
+  align-items: center; gap: 6px; flex-shrink: 0;
+}
+#lead-banner.show { display: flex; animation: slideDown .3s ease-out; }
+@keyframes slideDown { from{transform:translateY(-100%)} to{transform:none} }
+
+/* messages */
+#msgs {
+  flex: 1; overflow-y: auto; padding: 16px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth;
+  background: #fafcff;
+}
+#msgs::-webkit-scrollbar { width: 4px; }
+#msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.msg { display: flex; gap: 8px; align-items: flex-end; animation: pop .25s ease-out; }
+.msg.user { flex-direction: row-reverse; }
+@keyframes pop { from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:none} }
+
+.mav {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.msg.bot  .mav { background: linear-gradient(135deg,var(--primary),var(--primary2)); color:white; font-size:12px; }
+.msg.user .mav { background: #e8f0fe; font-size: 13px; }
+
+.bbl {
+  max-width: 80%; padding: 9px 13px; border-radius: 16px;
+  font-size: 13px; line-height: 1.55;
+}
+.msg.bot  .bbl { background: white; border: 1px solid var(--border); border-bottom-left-radius: 4px; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.msg.user .bbl { background: linear-gradient(135deg,var(--primary),var(--primary2)); color: white; border-bottom-right-radius: 4px; }
+.bbl b, .bbl strong { color: var(--primary); }
+.msg.user .bbl b, .msg.user .bbl strong { color: #b3d4ff; }
+.bbl ul { padding-left: 16px; margin-top: 4px; }
+.bbl li { margin-bottom: 3px; }
+
+/* typing */
+.typing-bbl {
+  background: white; border: 1px solid var(--border);
+  border-radius: 16px; border-bottom-left-radius: 4px;
+  padding: 11px 14px; display: flex; gap: 5px; align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.typing-bbl span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--primary); opacity: .45;
+  animation: tdot 1.1s ease-in-out infinite;
+}
+.typing-bbl span:nth-child(2) { animation-delay: .18s; }
+.typing-bbl span:nth-child(3) { animation-delay: .36s; }
+@keyframes tdot { 0%,60%,100%{transform:none;opacity:.45} 30%{transform:translateY(-5px);opacity:1} }
+
+/* input */
+.cin {
+  padding: 10px 12px 12px;
+  background: white;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cin-row { display: flex; gap: 8px; align-items: flex-end; }
+#inp {
+  flex: 1; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 9px 13px; color: var(--text);
+  font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px;
+  resize: none; outline: none; min-height: 40px; max-height: 90px;
+  line-height: 1.45; transition: border-color .2s;
+}
+#inp:focus { border-color: var(--primary2); background: white; }
+#inp::placeholder { color: var(--muted); }
+#sbtn {
+  width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 10px rgba(0,85,179,0.3);
+  transition: all .18s;
+}
+#sbtn:hover { transform: scale(1.05); }
+#sbtn:disabled { opacity: .35; transform: none; cursor: not-allowed; }
+#sbtn svg { width: 17px; height: 17px; fill: white; }
+.cin-note { font-size: 10px; color: var(--muted); text-align: center; margin-top: 6px; }
+
+/* API key screen */
+.apikey-scr {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 28px 22px; gap: 13px; text-align: center;
+  background: #fafcff;
+}
+.apikey-scr .ico { font-size: 36px; }
+.apikey-scr h3 { font-size: 15px; font-weight: 700; color: var(--text); }
+.apikey-scr p  { font-size: 12px; color: var(--muted); line-height: 1.65; }
+.ak-inp {
+  width: 100%; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 13px; color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  outline: none; transition: border-color .2s;
+}
+.ak-inp:focus { border-color: var(--primary2); background: white; }
+.ak-btn {
+  width: 100%; padding: 11px;
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  border: none; border-radius: 10px; cursor: pointer;
+  color: white; font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px; font-weight: 700; transition: opacity .2s;
+  box-shadow: 0 3px 12px rgba(0,85,179,0.3);
+}
+.ak-btn:hover { opacity: .88; }
+.ak-note { font-size: 10.5px; color: var(--muted); }
+.ak-note a { color: var(--primary); }
+
+/* success */
+.success-scr {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 28px 22px; gap: 14px; text-align: center;
+  animation: pop .4s ease-out; background: #fafcff;
+}
+.sico {
+  width: 68px; height: 68px; border-radius: 50%;
+  background: linear-gradient(135deg, #d4edda, #c3e6cb);
+  border: 2px solid var(--green);
+  display: flex; align-items: center; justify-content: center; font-size: 28px;
+}
+.success-scr h2 { font-size: 17px; font-weight: 700; color: var(--text); }
+.success-scr p  { font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.recap {
+  width: 100%; background: #f0f6ff;
+  border: 1px solid #c7dcf7; border-radius: 10px;
+  padding: 11px 13px; font-size: 12px; color: var(--muted);
+  text-align: left; line-height: 1.7;
+}
+.recap b { color: var(--text); }
+
+/* lead alert screen overlay */
+.lead-alert-scr {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 28px 22px; gap: 14px; text-align: center;
+  animation: pop .4s ease-out; background: #fff9f0;
+}
+.lico {
+  width: 68px; height: 68px; border-radius: 50%;
+  background: linear-gradient(135deg, #fff3cd, #ffe69c);
+  border: 2px solid var(--orange);
+  display: flex; align-items: center; justify-content: center; font-size: 28px;
+  box-shadow: 0 0 20px rgba(244,162,97,0.25);
+}
+.lead-alert-scr h2 { font-size: 16px; font-weight: 700; color: var(--text); }
+.lead-alert-scr p  { font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.lead-recap {
+  width: 100%; background: #fff3cd;
+  border: 1px solid #ffc107; border-radius: 10px;
+  padding: 11px 13px; font-size: 12px; color: #7a4500;
+  text-align: left; line-height: 1.7;
+}
+.lead-recap b { color: #5a3000; }
+
+@media(max-width: 440px){
+  #cwin { right:0; bottom:0; width:100%; height:100%; border-radius:0; }
+  #fab  { bottom:20px; right:20px; }
+}
+</style>
+</head>
+<body>
+<div class="demo-page"></div>
+<div class="demo-pill">🔌 Demo Widget — ICCOM.it · Powered by Gemini (gratuito)</div>
+
+<!-- FAB -->
+<button id="fab" onclick="toggleChat()">
+  <svg class="ico-chat" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+  <svg class="ico-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  <div class="fab-badge" id="badge">1</div>
+</button>
+
+<!-- CHAT WINDOW -->
+<div id="cwin">
+  <div class="hdr">
+    <div class="hdr-av">🛰️<div class="hdr-dot"></div></div>
+    <div class="hdr-info">
+      <h3>Assistente ICCOM</h3>
+      <p>● Online · Risponde subito</p>
+    </div>
+    <button class="hdr-close" onclick="toggleChat()">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+  </div>
+
+  <div id="lead-banner">🔔 Lead business rilevato — notifica inviata al team!</div>
+
+  <div id="msgs"></div>
+
+  <div class="cin" id="cin">
+    <div class="cin-row">
+      <textarea id="inp" placeholder="Scrivi un messaggio…" rows="1"
+        onkeydown="onKey(event)" oninput="grow(this)"></textarea>
+      <button id="sbtn" onclick="send()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+    <div class="cin-note">🔒 Dati trattati in conformità GDPR · iccom.it</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  BASE DI CONOSCENZA ICCOM (estratta dal sito)
+// ══════════════════════════════════════════════════════
+const ICCOM_KNOWLEDGE = `
+ICCOM S.r.l. — Provider Internet e Telecomunicazioni con sede in Piemonte.
+Sito: https://www.iccom.it | Tel: 011/0133090
+Slogan: "Internet Wireless ovunque" — "Ovunque tu sia, in qualsiasi settore operi"
+
+━━━ OFFERTE PRIVATI ━━━
+• Linea Internet 30 Mega (FWA Radio) — iccom.it/famiglia/linea-internet-30-mega/
+• 30Mega Stagionale (FWA Radio) — per esigenze stagionali
+• Centomega / Linea 100 Mega — €32,90/mese, attivazione €39,90 — OFFERTA IN EVIDENZA
+• ICCOM Fibra (FTTH) — alta velocità in fibra ottica
+• ICCOM MobileData FWA (LTE/5G) — connessione wireless 4G/5G
+
+━━━ OFFERTE PROFESSIONISTI / P.IVA ━━━
+• Onde Radio per P.IVA (FWA)
+• ICCOM Fibra per P.IVA
+• Mobiledata per P.IVA (LTE/5G)
+
+━━━ SERVIZI BUSINESS / AZIENDE ━━━
+ICCOM ha una divisione business completa con due linee principali:
+
+[SMALL BUSINESS] — per piccole imprese: connettività internet affidabile, assistenza dedicata
+[TOP BUSINESS] — per medie e grandi aziende, include:
+  • Cablaggio strutturato e Networking — infrastruttura LAN professionale
+  • Connettività con Backup/Failover automatico — doppia connessione 5G+fibra, zero downtime
+  • Firewall e Sicurezza Informatica — protezione multi-livello, monitoraggio 24/7, personalizzazione su misura
+  • Centralino Virtuale VoIP/PBX — IVR, voicemail, code chiamate, remotizzazione interni
+  • Reti Wi-Fi aziendali — copertura uniforme, sicura, performante
+  • Aziende Multisede — VPN sicura, centralino unico, scambio dati tra sedi
+  • Consulenza IT — analisi, gestione, manutenzione infrastruttura IT
+  • Hybrid Cloud — server virtuali e desktop virtuali
+  • Video Sorveglianza — impianti professionali con alert automatici
+  • Connettività 5G aziendale
+[PROJECT] — soluzioni per Pubblica Amministrazione, Industria 4.0, scuole, territorio
+  • Pubblica Amministrazione
+  • Industria 4.0
+  • Scuola ICCOM
+  • Ingegneria ICCOM
+
+━━━ SURFING SAFE — CYBERSECURITY ━━━
+Progetto dedicato alla sicurezza digitale:
+• Per Aziende e Professionisti: politiche di sicurezza, formazione personale, rete di supporto
+• Per Scuole e Famiglie: educazione digitale, percorsi formativi
+Servizi inclusi: Firewall gestito, monitoraggio H24, VPN aziendale, formazione cybersecurity
+Contatto: iccom.it/aziende/il-progetto/ e iccom.it/aziende/agisci-subito/
+
+━━━ TECNOLOGIE ━━━
+• FWA Radio (Fibra-Radio misto)
+• FTTH (Fibra fino all'abitazione)
+• FTTC (Fibra fino al cabinet)
+• LTE / 5G mobile
+• Data Center proprio
+• NOC dedicato con monitoraggio proattivo
+• R&D interno
+
+━━━ ALTRI SERVIZI ━━━
+• Solo Voce (telefonia)
+• Condominio (connettività condominiale)
+• Domotica / Smart Home (iccomluxury.com)
+• Collega un Amico: 50% sconto installazione + 2€ meno in bolletta per sempre
+• Risparmiotech.it: e-commerce sconti per clienti ICCOM
+
+━━━ ASSISTENZA ━━━
+• Assistenza tecnica e amministrativa
+• Verifica copertura: iccom.it/copertura/
+• Modulistica e pagamenti online
+• Area riservata clienti
+
+━━━ CHI SIAMO ━━━
+ICCOM S.r.l. è un provider internet locale con forte radicamento territoriale in Piemonte.
+Valori: innovazione, sostenibilità (ICCOM Green), etica, benessere dei lavoratori.
+Clienti di riferimento: Confartigianato, Tubosider, ASP e altre realtà locali.
+`;
+
+// ══════════════════════════════════════════════════════
+//  SYSTEM PROMPT
+// ══════════════════════════════════════════════════════
+const SYSTEM = `Sei l'assistente virtuale di ICCOM, un provider internet e telecomunicazioni italiano.
+
+BASE DI CONOSCENZA:
+${ICCOM_KNOWLEDGE}
+
+IL TUO RUOLO:
+Sei un assistente amichevole e professionale che aiuta tutti i visitatori del sito — privati, professionisti e aziende — a trovare informazioni, capire i servizi e contattare ICCOM.
+
+ISTRUZIONI GENERALI:
+- Rispondi sempre in italiano, tono cordiale e professionale
+- Tieni le risposte concise (max 3-4 righe per messaggio)
+- Se non conosci una risposta precisa, invita a chiamare il 011/0133090 o visitare iccom.it
+- Usa formattazione semplice (grassetto con **testo**)
+- Non inventare prezzi non presenti nella knowledge base
+
+━━━ RILEVAMENTO LEAD BUSINESS — ISTRUZIONE CRITICA ━━━
+Durante la conversazione, analizza OGNI messaggio alla ricerca di questi segnali che indicano un potenziale cliente business di alto valore:
+
+SEGNALI DA INTERCETTARE:
+1. Ruolo aziendale rilevante: CEO, CTO, CFO, Direttore, Responsabile IT, titolare, amministratore
+2. Problemi su linee/connettività aziendali: "linea aziendale", "connessione ufficio", "caduta di rete", "problemi internet in azienda", "downtime", "latenza alta"
+3. Interesse cybersecurity: "sicurezza informatica", "firewall", "VPN aziendale", "protezione dati", "attacco hacker", "ransomware", "backup aziendale"
+4. Dimensioni significative: menziona dipendenti (>5), più sedi, filiali, stabilimenti
+5. Servizi enterprise: centralino, VoIP, cloud aziendale, multisede, cablaggio uffici
+
+COME COMPORTARSI QUANDO RILEVI UN SEGNALE:
+1. Rispondi normalmente alla domanda dell'utente, in modo utile e professionale
+2. Mostra interesse genuino per le esigenze aziendali
+3. Cerca discretamente di raccogliere: nome/ruolo, nome azienda, email o telefono
+4. NON essere invadente — integra le domande naturalmente nella conversazione
+5. Quando hai rilevato il segnale E raccolto almeno nome+contatto, aggiungi alla fine del tuo messaggio questo tag JSON su una riga separata:
+LEAD_DETECTED:{"nome":"...","ruolo":"...","azienda":"...","contatto":"...","esigenza":"...","segnale":"...","trascrizione_breve":"..."}
+
+IMPORTANTE: Emetti il tag LEAD_DETECTED solo UNA VOLTA per conversazione, quando hai abbastanza informazioni. Non emetterlo se non hai almeno un contatto (email o telefono).`;
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let history = [];
+let busy = false;
+let apiKey = '';
+let started = false;
+let leadFired = false;
+
+// ══════════════════════════════════════════════════════
+//  CHAT TOGGLE
+// ══════════════════════════════════════════════════════
+function toggleChat() {
+  const win = document.getElementById('cwin');
+  const fab = document.getElementById('fab');
+  const open = win.classList.toggle('open');
+  fab.classList.toggle('open', open);
+  fab.querySelector('.ico-chat').style.display = open ? 'none' : 'block';
+  fab.querySelector('.ico-close').style.display = open ? 'block' : 'none';
+  document.getElementById('badge').style.display = 'none';
+  if (open && !started) initChat();
+}
+
+function initChat() {
+  started = true;
+  const saved = sessionStorage.getItem('iccom_gemini_key');
+  if (saved) { apiKey = saved; startConversation(); }
+  else showApiKeyScreen();
+}
+
+// ══════════════════════════════════════════════════════
+//  API KEY SCREEN
+// ══════════════════════════════════════════════════════
+function showApiKeyScreen() {
+  document.getElementById('msgs').innerHTML = '';
+  document.getElementById('cin').style.display = 'none';
+  const msgs = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'apikey-scr';
+  d.id = 'ak-scr';
+  d.innerHTML = `
+    <div class="ico">🔑</div>
+    <h3>Configura l'Assistente AI</h3>
+    <p>Inserisci la tua <strong>Groq API Key</strong> (gratuita) per attivare il bot.<br>
+    Rimane solo in questa sessione del browser.</p>
+    <input class="ak-inp" id="ak-inp" type="password" placeholder="AIza..." />
+    <button class="ak-btn" onclick="saveKey()">▶ Attiva Assistente ICCOM</button>
+    <p class="ak-note">Chiave gratuita su <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a> (nessuna carta)<br>
+    1.500 richieste/giorno gratis · chiamate dirette dal browser ✅</p>
+  `;
+  msgs.appendChild(d);
+}
+
+function saveKey() {
+  const k = document.getElementById('ak-inp').value.trim();
+  if (!k.startsWith('AIza')) { alert('Chiave non valida. La chiave Gemini inizia con AIza...'); return; }
+  apiKey = k;
+  sessionStorage.setItem('iccom_gemini_key', k);
+  document.getElementById('cin').style.display = 'block';
+  document.getElementById('msgs').innerHTML = '';
+  startConversation();
+}
+
+// ══════════════════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════════════════
+async function startConversation() {
+  await callClaude('Benvenuto! Presentati brevemente come assistente ICCOM e chiedi come puoi aiutare.', true);
+}
+
+// ══════════════════════════════════════════════════════
+//  API CALL
+// ══════════════════════════════════════════════════════
+async function callClaude(userMsg, isInternal = false) {
+  busy = true;
+  document.getElementById('sbtn').disabled = true;
+
+  history.push({ role: 'user', content: userMsg });
+  showTyping();
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM }] },
+          contents: history.map(m => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          })),
+          generationConfig: { maxOutputTokens: 1000 }
+        })
+      }
+    );
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      hideTyping();
+      addBot(`⚠️ Errore API: ${err.error?.message || resp.status}`);
+      busy = false; document.getElementById('sbtn').disabled = false;
+      return;
+    }
+
+    const data = await resp.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Detect lead tag
+    const leadMatch = raw.match(/LEAD_DETECTED:(\{[\s\S]*?\})/);
+    const clean = raw.replace(/LEAD_DETECTED:(\{[\s\S]*?\})/, '').trim();
+
+    hideTyping();
+    if (clean) addBot(renderMd(clean));
+
+    history.push({ role: 'assistant', content: clean || raw });
+
+    if (leadMatch && !leadFired) {
+      leadFired = true;
+      try {
+        const leadData = JSON.parse(leadMatch[1]);
+        handleLeadDetected(leadData);
+      } catch(e) { console.warn('Lead parse error', e); }
+    }
+
+  } catch(e) {
+    hideTyping();
+    addBot('⚠️ Errore di connessione. Riprova tra qualche istante.');
+  }
+
+  busy = false;
+  document.getElementById('sbtn').disabled = false;
+}
+
+// ══════════════════════════════════════════════════════
+//  LEAD DETECTED
+// ══════════════════════════════════════════════════════
+function handleLeadDetected(data) {
+  // Show banner
+  const banner = document.getElementById('lead-banner');
+  banner.classList.add('show');
+
+  // Log to console (in production: POST to backend/Apps Script)
+  console.log('🚨 LEAD BUSINESS RILEVATO:', data);
+  console.log('📧 EMAIL DA INVIARE A:', 'team@iccom.it');
+  console.log('📋 Dati lead:', JSON.stringify(data, null, 2));
+
+  // In production:
+  // fetch('YOUR_APPS_SCRIPT_OR_BACKEND_URL', {
+  //   method: 'POST',
+  //   headers: {'Content-Type': 'application/json'},
+  //   body: JSON.stringify({
+  //     type: 'LEAD_BUSINESS',
+  //     timestamp: new Date().toISOString(),
+  //     ...data,
+  //     fullTranscript: history.map(m => `${m.role}: ${m.content}`).join('\n')
+  //   })
+  // });
+
+  // After 8 seconds, show internal alert screen (simulating email sent)
+  setTimeout(() => showLeadAlertScreen(data), 8000);
+}
+
+function showLeadAlertScreen(data) {
+  // This is a DEMO view — in production this would just log/email silently
+  // We show it here to demonstrate the feature works
+  const msgs = document.getElementById('msgs');
+  msgs.innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'lead-alert-scr';
+  d.innerHTML = `
+    <div class="lico">🔔</div>
+    <h2>Lead Business Rilevato!</h2>
+    <p>Il team ICCOM ha ricevuto una <strong>notifica email</strong> con i dettagli di questo contatto business.<br>
+    Un commerciale prenderà in carico la richiesta.</p>
+    <div class="lead-recap">
+      <b>👤 Contatto:</b> ${esc(data.nome || '-')}<br>
+      <b>🏢 Ruolo/Azienda:</b> ${esc(data.ruolo || '-')} — ${esc(data.azienda || '-')}<br>
+      <b>📞 Contatto:</b> ${esc(data.contatto || '-')}<br>
+      <b>🔍 Esigenza:</b> ${esc(data.esigenza || '-')}<br>
+      <b>⚡ Segnale:</b> ${esc(data.segnale || '-')}
+    </div>
+    <p style="font-size:11px;color:#a0856a">
+      ⚠️ Questa schermata è visibile solo in modalità demo.<br>
+      In produzione il rilevamento avviene silenziosamente in background.
+    </p>
+  `;
+  msgs.appendChild(d);
+  document.getElementById('cin').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════════════
+function addBot(html) {
+  const msgs = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="mav">IC</div><div class="bbl">${html}</div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addUser(text) {
+  const msgs = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = `<div class="mav">👤</div><div class="bbl">${esc(text)}</div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'msg bot'; d.id = 'typing';
+  d.innerHTML = `<div class="mav">IC</div><div class="typing-bbl"><span></span><span></span><span></span></div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function hideTyping() { const t = document.getElementById('typing'); if(t) t.remove(); }
+
+function renderMd(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^[-•] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>[\s\S]*<\/li>)/g, '<ul>$1</ul>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function send() {
+  if (busy) return;
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = ''; inp.style.height = 'auto';
+  addUser(text);
+  await callClaude(text, false);
+}
+
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+function grow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 90) + 'px';
+}
+
+// Badge after 2s
+setTimeout(() => { if (!started) document.getElementById('badge').style.display='flex'; }, 2000);
+</script>
+</body>
+</html>
