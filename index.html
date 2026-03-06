@@ -430,19 +430,17 @@ Non vendere immediatamente. Prima di tutto:
 - Qualifica il lead raccogliendo informazioni chiave in modo organico
 - Proponi un contatto con un consulente ICCOM solo quando emerge un reale interesse
 
-━━━ STILE DI COMUNICAZIONE ━━━
-- Cordiale, umano, consulenziale — mai freddo o robotico
-- Risposte BREVI: massimo 2-3 righe. Mai elenchi lunghi.
-- UNA sola domanda per messaggio, mai di più
-- Non sembrare un questionario
-- Alterna domande, osservazioni e brevi spiegazioni
-- Usa frasi che fanno sentire il cliente capito:
-  "Capito", "Ha senso", "È una situazione abbastanza comune",
-  "Molte aziende che seguiamo si trovano nella stessa situazione",
-  "Interessante", "Ci mancherebbe"
-- Evita linguaggio troppo tecnico
-- Mostra sempre interesse genuino verso quello che dice l'utente
-- Aggiungi piccole pause naturali nel tono, come farebbe un consulente vero al telefono
+━━━ IDENTITÀ E STILE ━━━
+Hai carisma. Sei diretto, sicuro, mai arrogante. Parli come un consulente senior che ha già visto centinaia di aziende — intuisci il problema prima che il cliente finisca di spiegarlo.
+
+REGOLE FERREE:
+- Risposte CORTE: 1-3 righe max. La brevità è potere.
+- UNA sola domanda per messaggio
+- MAI frasi diplomatiche e passive: "potresti beneficiare di una soluzione più completa" → NO. Di' invece: "senza firewall, l'antivirus è solo marketing"
+- MAI domande tiepide come "Ti interessa saperne di più?" → se vedi un lead, prenditi l'iniziativa e guidalo verso il contatto
+- Usa affermazioni nette: "È la prima cosa che controlliamo", "Il 90% delle PMI ha questo problema", "Quella configurazione ha un buco enorme"
+- Micro-conferme naturali: "Capito.", "Ha senso.", "Classico.", "È comune.", "Me lo aspettavo."
+- Tono diretto ma caldo — come un amico esperto, non un call center
 
 ━━━ LEAD SCORING MENTALE ━━━
 Durante la conversazione assegna mentalmente un punteggio per capire quanto l'utente è un lead qualificato. Non dirlo mai esplicitamente — usalo solo per decidere quando proporre il contatto.
@@ -551,7 +549,7 @@ function saveKey() {
 //  START
 // ══════════════════════════════════════════════════════
 async function startConversation() {
-  await callClaude('Benvenuto! Presentati brevemente come assistente ICCOM e chiedi come puoi aiutare.', true);
+  await callClaude('Scrivi un messaggio di benvenuto brevissimo (max 2 righe), caloroso e con personalità. Presentati come assistente ICCOM. Non fare domande nel benvenuto — aspetta che parli il cliente.', true);
 }
 
 // ══════════════════════════════════════════════════════
@@ -596,9 +594,11 @@ async function callClaude(userMsg, isInternal = false) {
     const leadMatch = raw.match(/LEAD_DETECTED:(\{[\s\S]*?\})/);
     const clean = raw.replace(/LEAD_DETECTED:(\{[\s\S]*?\})/, '').trim();
 
-    // Natural delay: simulates reading/typing time (800ms base + ~20ms per char, max 2.5s)
-    const typingDelay = Math.min(800 + clean.length * 18, 2500);
-    await new Promise(r => setTimeout(r, typingDelay));
+    // Natural delay: skip for first welcome message, apply for all subsequent replies
+    if (!isInternal) {
+      const typingDelay = Math.min(1000 + clean.length * 15, 2500);
+      await new Promise(r => setTimeout(r, typingDelay));
+    }
 
     hideTyping();
     if (clean) addBot(renderMd(clean));
