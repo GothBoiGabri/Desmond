@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ICCOM — Assistente AI (Gemini)</title>
+<title>ICCOM — Assistente AI (Groq)</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -298,7 +298,7 @@ body {
 </head>
 <body>
 <div class="demo-page"></div>
-<div class="demo-pill">🔌 Demo Widget — ICCOM.it · Powered by Gemini (gratuito)</div>
+<div class="demo-pill">🔌 Demo Widget — ICCOM.it · Powered by Groq (gratuito)</div>
 
 <!-- FAB -->
 <button id="fab" onclick="toggleChat()">
@@ -476,7 +476,7 @@ function toggleChat() {
 
 function initChat() {
   started = true;
-  const saved = sessionStorage.getItem('iccom_gemini_key');
+  const saved = sessionStorage.getItem('iccom_groq_key');
   if (saved) { apiKey = saved; startConversation(); }
   else showApiKeyScreen();
 }
@@ -496,19 +496,19 @@ function showApiKeyScreen() {
     <h3>Configura l'Assistente AI</h3>
     <p>Inserisci la tua <strong>Groq API Key</strong> (gratuita) per attivare il bot.<br>
     Rimane solo in questa sessione del browser.</p>
-    <input class="ak-inp" id="ak-inp" type="password" placeholder="AIza..." />
+    <input class="ak-inp" id="ak-inp" type="password" placeholder="gsk_..." />
     <button class="ak-btn" onclick="saveKey()">▶ Attiva Assistente ICCOM</button>
-    <p class="ak-note">Chiave gratuita su <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a> (nessuna carta)<br>
-    1.500 richieste/giorno gratis · chiamate dirette dal browser ✅</p>
+    <p class="ak-note">Chiave gratuita su <a href="https://console.groq.com" target="_blank">console.groq.com</a> (nessuna carta)<br>
+    14.400 richieste/giorno gratis · funziona in EU ✅</p>
   `;
   msgs.appendChild(d);
 }
 
 function saveKey() {
   const k = document.getElementById('ak-inp').value.trim();
-  if (!k.startsWith('AIza')) { alert('Chiave non valida. La chiave Gemini inizia con AIza...'); return; }
+  if (!k.startsWith("gsk_")) { alert("Chiave non valida. Deve iniziare con gsk_..."); return; }
   apiKey = k;
-  sessionStorage.setItem('iccom_gemini_key', k);
+  sessionStorage.setItem('iccom_groq_key', k);
   document.getElementById('cin').style.display = 'block';
   document.getElementById('msgs').innerHTML = '';
   startConversation();
@@ -532,21 +532,21 @@ async function callClaude(userMsg, isInternal = false) {
   showTyping();
 
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM }] },
-          contents: history.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          })),
-          generationConfig: { maxOutputTokens: 1000 }
-        })
-      }
-    );
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1000,
+        messages: [
+          { role: 'system', content: SYSTEM },
+          ...history
+        ]
+      })
+    });
 
     if (!resp.ok) {
       const err = await resp.json();
@@ -557,7 +557,7 @@ async function callClaude(userMsg, isInternal = false) {
     }
 
     const data = await resp.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const raw = data.choices?.[0]?.message?.content || '';
 
     // Detect lead tag
     const leadMatch = raw.match(/LEAD_DETECTED:(\{[\s\S]*?\})/);
