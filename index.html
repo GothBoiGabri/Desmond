@@ -528,6 +528,42 @@ Emetti UNA SOLA VOLTA per conversazione. Mai senza nome + contatto.`;
 let history = [];
 let busy = false;
 let apiKey = '';
+let visitorIp = null;
+let intentFired = false; // notifica silenziosa IP già inviata
+let leadFiredSheets = false; // invio finale sheets già fatto
+
+// Google Apps Script URL — sostituisci con il tuo dopo il deploy
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbydikiePh6A7ytaN1D76x9Z2uvNdHCEPHL_sHeFI_ZBUhIjkYnL6PpHfF5gJP88__NtMA/exec';
+
+// Cattura IP del visitatore in background all'avvio
+(async () => {
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const d = await r.json();
+    visitorIp = d.ip;
+  } catch(e) { visitorIp = 'non disponibile'; }
+})();
+
+// Invia notifica silenziosa a Google Sheet
+async function sendToSheets(tipo, extraData = {}) {
+  if (!SHEETS_URL || SHEETS_URL === 'INSERISCI_QUI_URL_APPS_SCRIPT') return;
+  const trascrizione = history.map(m => (m.role === 'user' ? 'Cliente: ' : 'Bot: ') + m.content).join('\n');
+  const payload = {
+    tipo,           // 'INTENTO' oppure 'LEAD'
+    ip: visitorIp,
+    timestamp: new Date().toISOString(),
+    trascrizione: trascrizione.slice(-2000), // ultimi 2000 char
+    ...extraData
+  };
+  try {
+    await fetch(SHEETS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) { console.warn('Sheets send error', e); }
+}
 let started = false;
 let leadFired = false;
 
@@ -645,6 +681,17 @@ async function callClaude(userMsg, isInternal = false) {
 
     history.push({ role: 'assistant', content: clean || raw });
 
+    // Notifica silenziosa appena si percepisce intento business (una sola volta)
+    if (!intentFired) {
+      const triggerWords = ['cybersecurity','sicurezza informatica','firewall','ransomware','backup','protezione dati','infrastruttura','server','cloud','antivirus','attacco','vpn','rete aziendale'];
+      const lastUserMsg = (history.filter(m => m.role === 'user').slice(-1)[0]?.content || '').toLowerCase();
+      if (triggerWords.some(w => lastUserMsg.includes(w))) {
+        intentFired = true;
+        sendToSheets('INTENTO', { nota: 'Visitatore ha mostrato interesse business' });
+        console.log('📡 Notifica intento inviata — IP:', visitorIp);
+      }
+    }
+
     if (leadMatch && !leadFired) {
       leadFired = true;
       try {
@@ -670,12 +717,21 @@ function handleLeadDetected(data) {
   const banner = document.getElementById('lead-banner');
   banner.classList.add('show');
 
-  // Log to console (in production: POST to backend/Apps Script)
-  console.log('🚨 LEAD BUSINESS RILEVATO:', data);
-  console.log('📧 EMAIL DA INVIARE A:', 'team@iccom.it');
-  console.log('📋 Dati lead:', JSON.stringify(data, null, 2));
+  // Invia dati completi a Google Sheet (una sola volta)
+  if (!leadFiredSheets) {
+    leadFiredSheets = true;
+    sendToSheets('LEAD', {
+      nome: data.nome || '',
+      ruolo: data.ruolo || '',
+      azienda: data.azienda || '',
+      contatto: data.contatto || '',
+      esigenza: data.esigenza || '',
+      score: data.score || ''
+    });
+    console.log('🚨 LEAD inviato a Google Sheet:', data);
+  }
 
-  // In production:
+  // In production legacy:
   // fetch('YOUR_APPS_SCRIPT_OR_BACKEND_URL', {
   //   method: 'POST',
   //   headers: {'Content-Type': 'application/json'},
