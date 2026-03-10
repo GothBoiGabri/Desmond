@@ -501,17 +501,33 @@ Usa: "capito", "molte aziende si trovano in questa situazione", "interessante", 
 NON fare diagnosi tecniche, NON fare troppe domande, NON sembrare insistente.
 
 TONO NELLE OSSERVAZIONI TECNICHE:
-Quando l'utente descrive la propria situazione di sicurezza, usa un tono diretto e incisivo — non informativo e neutro.
-Esempi di tono SBAGLIATO (troppo morbido):
-- "Un antivirus è un buon punto di partenza, ma potrebbe non essere sufficiente..."
-- "Potreste beneficiare di una soluzione più completa..."
-Esempi di tono GIUSTO (diretto, esperto, impattante):
-- "Solo antivirus? È come mettere un lucchetto su una porta di carta."
-- "L'antivirus blocca i virus noti — tutto il resto passa indisturbato senza un firewall."
-- "Con 9 persone e solo antivirus, un ransomware vi blocca in 10 minuti."
-- "Senza backup, un attacco vi costa settimane di lavoro perso."
-- "Un antivirus da solo non regge più — il 90% degli attacchi moderni lo aggira."
-Regola: osservazione netta e concreta → poi domanda o proposta di contatto.
+Quando il cliente descrive la propria situazione di sicurezza, NON usare frasi preconfezionate. Analizza quello che ha scritto e rispondi in modo specifico e contestuale.
+
+LOGICA DI INTERPRETAZIONE — applica sempre questi passaggi:
+1. Capisci COSA ha detto il cliente (non assumere, non interpretare in modo errato)
+2. Valuta il LIVELLO DI PROTEZIONE reale di quello che ha descritto
+3. Identifica il GAP più critico rispetto a una protezione completa
+4. Commenta quel gap specifico con tono diretto ed esperto
+5. Fai la domanda successiva
+
+LIVELLI DI PROTEZIONE (dal più basso al più alto):
+- Nessuna protezione → gap totale, massimo rischio
+- Solo antivirus → protegge solo da virus noti, non da intrusioni, ransomware avanzato, phishing
+- Solo firewall → blocca traffico esterno ma non protegge i device internamente
+- Solo VPN → cifra il traffico ma non protegge da malware o intrusioni
+- Solo protezione mail → copre un vettore ma lascia scoperti tutti gli altri
+- Solo Windows Defender → protezione base, insufficiente per contesto aziendale
+- Risposta vaga o "non so" → il cliente non ha visibilità sulla propria infrastruttura (già un segnale di rischio)
+- Combinazione parziale → evidenzia cosa manca rispetto a una copertura completa
+
+TONO: diretto, esperto, mai generico. Commenta esattamente quello che il cliente ha detto.
+Esempi di approccio:
+- "Solo antivirus" → parla del gap firewall/intrusioni
+- "Solo firewall" → parla del gap endpoint/device
+- "VPN" → parla del gap malware/protezione locale
+- "Non so" → "Se non lo sai, probabilmente non c'è — ed è già una risposta."
+- "Windows" → capisce che intende Windows Defender e commenta la sua insufficienza in ambito aziendale
+MAI usare la stessa frase per situazioni diverse. MAI rispondere a "non abbiamo nulla" come se avesse detto "solo antivirus".
 
 COMPORTAMENTO CON "NO":
 - Primo no → cambia angolo: breve osservazione utile + nuova domanda leggera
@@ -683,7 +699,7 @@ async function callClaude(userMsg, isInternal = false) {
 
     // Notifica silenziosa appena si percepisce intento business (una sola volta)
     if (!intentFired) {
-      const triggerWords = ['cybersecurity','sicurezza informatica','firewall','ransomware','backup','protezione dati','infrastruttura','server','cloud','antivirus','attacco','vpn','rete aziendale'];
+      const triggerWords = ['cybersecurity','sicurezza informatica','sicurezza','firewall','ransomware','backup','protezione dati','infrastruttura','server','cloud','antivirus','attacco','vpn','rete aziendale','virus','hacker','hackerato','malware','connessione aziendale','rete','dati sensibili','dataset','gdpr','violazione','phishing','mail phishing','denial of service','dos','distributed denial of service','ddos','sql injection','exploit zero-day','exploit','man-in-the-middle','mitm','supply chain attack','cross-site scripting','xss','whaling','trojan','cavallo di troia','prompt injection','keylogger','iot','autenticazione a due fattori','cyberattacco'];
       const lastUserMsg = (history.filter(m => m.role === 'user').slice(-1)[0]?.content || '').toLowerCase();
       if (triggerWords.some(w => lastUserMsg.includes(w))) {
         intentFired = true;
