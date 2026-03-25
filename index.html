@@ -213,7 +213,7 @@ body {
 #sbtn svg { width: 17px; height: 17px; fill: white; }
 .cin-note { font-size: 10px; color: var(--muted); text-align: center; margin-top: 6px; }
 
-/* API key screen */
+/* API key screen — nascosto in produzione */
 .apikey-scr {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -298,7 +298,7 @@ body {
 </head>
 <body>
 <div class="demo-page"></div>
-<div class="demo-pill">🔌 Demo Widget — ICCOM.it · Powered by Groq (gratuito)</div>
+<div class="demo-pill">🔌 Demo Widget — ICCOM.it · Powered by AI</div>
 
 <!-- FAB -->
 <button id="fab" onclick="toggleChat()">
@@ -547,11 +547,15 @@ LEAD_DETECTED:{"nome":"...","ruolo":"...","azienda":"...","contatto":"...","esig
 Emetti UNA SOLA VOLTA per conversazione. Mai senza nome + contatto.`;
 
 // ══════════════════════════════════════════════════════
+//  CONFIGURAZIONE — sostituisci con l'URL del tuo Worker
+// ══════════════════════════════════════════════════════
+const PROXY_URL = 'https://desmond.gabri-morelli01.workers.dev';
+
+// ══════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════
 let history = [];
 let busy = false;
-let apiKey = '';
 let visitorIp = null;
 let intentFired = false; // notifica silenziosa IP già inviata
 let leadFiredSheets = false; // invio finale sheets già fatto
@@ -592,6 +596,62 @@ let started = false;
 let leadFired = false;
 
 // ══════════════════════════════════════════════════════
+//  RILEVAMENTO INTENTO AI (Livello 2)
+// ══════════════════════════════════════════════════════
+async function checkIntentWithAI() {
+  // Costruisce un mini-contesto con gli ultimi 6 messaggi
+  const recentHistory = history.slice(-6)
+    .map(m => (m.role === 'user' ? 'Cliente: ' : 'Bot: ') + m.content)
+    .join('\n');
+
+  const prompt = `Analizza questa conversazione tra un visitatore e l'assistente di ICCOM (provider internet e cybersecurity).
+
+CONVERSAZIONE:
+${recentHistory}
+
+Rispondi SOLO con un JSON su una riga, niente altro:
+{"business": true/false, "motivo": "breve spiegazione in italiano"}
+
+business = true se il visitatore mostra interesse concreto per servizi aziendali, cybersecurity, connettività business, VoIP, cloud, o ha un problema IT — anche se non usa termini tecnici (es: "siamo stati bucati", "ho paura per i dati dei clienti", "la connessione in ufficio è lenta", "dobbiamo proteggere i dati", "lavoriamo in tanti da remoto").
+business = false se è un privato con domande consumer o una chiacchierata generica.`;
+
+  try {
+    const resp = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 80,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const raw = (data.choices?.[0]?.message?.content || '').trim();
+
+    // Parsing difensivo del JSON
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd   = raw.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) return;
+
+    const result = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+
+    if (result.business === true && !intentFired) {
+      intentFired = true;
+      sendToSheets('INTENTO', {
+        nota: result.motivo || 'Intento business rilevato via AI',
+        trigger: 'ai'
+      });
+      console.log('📡 [AI] Intento business rilevato:', result.motivo, '— IP:', visitorIp);
+    }
+  } catch(e) {
+    // Silenzioso — il rilevamento AI è best-effort, non blocca nulla
+    console.warn('checkIntentWithAI error:', e);
+  }
+}
+
+// ══════════════════════════════════════════════════════
 //  CHAT TOGGLE
 // ══════════════════════════════════════════════════════
 function toggleChat() {
@@ -607,43 +667,12 @@ function toggleChat() {
 
 function initChat() {
   started = true;
-  const saved = sessionStorage.getItem('iccom_groq_key');
-  if (saved) { apiKey = saved; startConversation(); }
-  else showApiKeyScreen();
+  startConversation(); // nessuna API key richiesta — tutto gestito dal proxy
 }
 
 // ══════════════════════════════════════════════════════
-//  API KEY SCREEN
+//  API KEY SCREEN — rimosso: la chiave è gestita dal proxy
 // ══════════════════════════════════════════════════════
-function showApiKeyScreen() {
-  document.getElementById('msgs').innerHTML = '';
-  document.getElementById('cin').style.display = 'none';
-  const msgs = document.getElementById('msgs');
-  const d = document.createElement('div');
-  d.className = 'apikey-scr';
-  d.id = 'ak-scr';
-  d.innerHTML = `
-    <div class="ico">🔑</div>
-    <h3>Configura l'Assistente AI</h3>
-    <p>Inserisci la tua <strong>Groq API Key</strong> (gratuita) per attivare il bot.<br>
-    Rimane solo in questa sessione del browser.</p>
-    <input class="ak-inp" id="ak-inp" type="password" placeholder="gsk_..." />
-    <button class="ak-btn" onclick="saveKey()">▶ Attiva Assistente ICCOM</button>
-    <p class="ak-note">Chiave gratuita su <a href="https://console.groq.com" target="_blank">console.groq.com</a> (nessuna carta)<br>
-    14.400 richieste/giorno gratis · funziona in EU ✅</p>
-  `;
-  msgs.appendChild(d);
-}
-
-function saveKey() {
-  const k = document.getElementById('ak-inp').value.trim();
-  if (!k.startsWith("gsk_")) { alert("Chiave non valida. Deve iniziare con gsk_..."); return; }
-  apiKey = k;
-  sessionStorage.setItem('iccom_groq_key', k);
-  document.getElementById('cin').style.display = 'block';
-  document.getElementById('msgs').innerHTML = '';
-  startConversation();
-}
 
 // ══════════════════════════════════════════════════════
 //  START
@@ -663,12 +692,9 @@ async function callClaude(userMsg, isInternal = false) {
   showTyping();
 
   try {
-    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const resp = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         max_tokens: 1000,
@@ -690,9 +716,29 @@ async function callClaude(userMsg, isInternal = false) {
     const data = await resp.json();
     const raw = data.choices?.[0]?.message?.content || '';
 
-    // Detect lead tag
-    const leadMatch = raw.match(/LEAD_DETECTED:(\{[\s\S]*?\})/);
-    const clean = raw.replace(/LEAD_DETECTED:(\{[\s\S]*?\})/, '').trim();
+    // ── Parsing difensivo LEAD_DETECTED ──────────────────────────────────
+    // Cerca il tag con o senza spazio, su qualsiasi riga, e rimuove tutto
+    // il blocco dal testo visibile — anche se il JSON è malformato.
+    let leadData = null;
+    let clean = raw;
+
+    const tagIndex = raw.search(/LEAD_DETECTED\s*:/i);
+    if (tagIndex !== -1) {
+      // Testo visibile = solo ciò che precede il tag
+      clean = raw.slice(0, tagIndex).trim();
+
+      // Estrai e parsa il JSON dopo il tag
+      const afterTag = raw.slice(tagIndex).replace(/LEAD_DETECTED\s*:/i, '').trim();
+      const jsonStart = afterTag.indexOf('{');
+      const jsonEnd   = afterTag.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        try {
+          leadData = JSON.parse(afterTag.slice(jsonStart, jsonEnd + 1));
+        } catch(e) {
+          console.warn('LEAD_DETECTED JSON malformato — nascosto al cliente:', afterTag.slice(jsonStart, jsonEnd + 1));
+        }
+      }
+    }
 
     // Natural delay: skip for first welcome message, apply for all subsequent replies
     if (!isInternal) {
@@ -705,23 +751,28 @@ async function callClaude(userMsg, isInternal = false) {
 
     history.push({ role: 'assistant', content: clean || raw });
 
-    // Notifica silenziosa appena si percepisce intento business (una sola volta)
+    // ── Rilevamento intento business (una sola volta per sessione) ─────────
+    // Livello 1: keyword deterministiche (istantaneo, nessuna chiamata API)
+    // Livello 2: valutazione AI (cattura sfumature e frasi implicite)
     if (!intentFired) {
       const triggerWords = ['cybersecurity','sicurezza informatica','sicurezza','firewall','ransomware','backup','protezione dati','infrastruttura','server','cloud','antivirus','attacco','vpn','rete aziendale','virus','hacker','hackerato','malware','connessione aziendale','rete','dati sensibili','dataset','gdpr','violazione','phishing','mail phishing','denial of service','dos','distributed denial of service','ddos','sql injection','exploit zero-day','exploit','man-in-the-middle','mitm','supply chain attack','cross-site scripting','xss','whaling','trojan','cavallo di troia','prompt injection','keylogger','iot','autenticazione a due fattori','cyberattacco','protezione','protezione avanzata','protezione rete','protezione infrastruttura'];
       const lastUserMsg = (history.filter(m => m.role === 'user').slice(-1)[0]?.content || '').toLowerCase();
+
       if (triggerWords.some(w => lastUserMsg.includes(w))) {
+        // Livello 1: keyword trovata — notifica immediata
         intentFired = true;
-        sendToSheets('INTENTO', { nota: 'Visitatore ha mostrato interesse business' });
-        console.log('📡 Notifica intento inviata — IP:', visitorIp);
+        sendToSheets('INTENTO', { nota: 'Keyword business rilevata', trigger: 'keyword' });
+        console.log('📡 [KEYWORD] Intento business rilevato — IP:', visitorIp);
+      } else if (history.filter(m => m.role === 'user').length >= 2) {
+        // Livello 2: dopo almeno 2 messaggi utente, chiedi all'AI di valutare l'intento
+        // Gira in background — non blocca la conversazione
+        checkIntentWithAI();
       }
     }
 
-    if (leadMatch && !leadFired) {
+    if (leadData && !leadFired) {
       leadFired = true;
-      try {
-        const leadData = JSON.parse(leadMatch[1]);
-        handleLeadDetected(leadData);
-      } catch(e) { console.warn('Lead parse error', e); }
+      handleLeadDetected(leadData);
     }
 
   } catch(e) {
