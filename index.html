@@ -552,6 +552,41 @@ Emetti UNA SOLA VOLTA per conversazione. Mai senza nome + contatto.`;
 const PROXY_URL = 'https://desmond.gabri-morelli01.workers.dev';
 
 // ══════════════════════════════════════════════════════
+//  SESSIONE — localStorage con scadenza 24h
+// ══════════════════════════════════════════════════════
+const SESSION_KEY  = 'iccom_session';
+const SESSION_TTL  = 24 * 60 * 60 * 1000; // 24 ore in ms
+
+function saveSession() {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      history,
+      intentFired,
+      leadFired,
+      leadFiredSheets,
+      savedAt: Date.now()
+    }));
+  } catch(e) { /* localStorage non disponibile, ignora */ }
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.savedAt || (Date.now() - s.savedAt) > SESSION_TTL) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return s;
+  } catch(e) { return null; }
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════
 let history = [];
@@ -667,7 +702,33 @@ function toggleChat() {
 
 function initChat() {
   started = true;
-  startConversation(); // nessuna API key richiesta — tutto gestito dal proxy
+  const session = loadSession();
+  if (session && session.history && session.history.length > 0) {
+    // Ripristina lo stato dalla sessione salvata
+    history         = session.history;
+    intentFired     = session.intentFired     || false;
+    leadFired       = session.leadFired       || false;
+    leadFiredSheets = session.leadFiredSheets  || false;
+    restoreMessages();
+    console.log('🔄 Sessione ripristinata —', history.length, 'messaggi');
+  } else {
+    startConversation(); // nuova conversazione
+  }
+}
+
+// Ridisegna i messaggi salvati nella chat senza richiamare l'API
+function restoreMessages() {
+  const msgs = document.getElementById('msgs');
+  msgs.innerHTML = '';
+  // Salta il primo messaggio (prompt interno di benvenuto)
+  const visible = history.slice(1);
+  visible.forEach(m => {
+    if (m.role === 'user') {
+      addUser(m.content);
+    } else if (m.role === 'assistant' && m.content) {
+      addBot(renderMd(m.content));
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -782,6 +843,7 @@ async function callClaude(userMsg, isInternal = false) {
 
   busy = false;
   document.getElementById('sbtn').disabled = false;
+  saveSession(); // persiste cronologia e stato dopo ogni risposta
 }
 
 // ══════════════════════════════════════════════════════
